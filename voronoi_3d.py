@@ -9,6 +9,7 @@ import math
 from sympy import Point3D, Plane, Polygon, Segment3D, Symbol
 from sympy.geometry.entity import GeometryEntity 
 import pprint
+import time
 
 
 class Polygon3DMixin:
@@ -58,38 +59,56 @@ class Polygon3DMixin:
         p = 10 ** ndigits
         return (number * p * 2 + 1) // 2 / p
 
+    def unique_close(self, vertices, atol=1e-12):
+        for i in range(len(vertices) - 1):
+            v1 = vertices[i]
+            v2 = vertices[i + 1]
+
+            if np.all(np.isclose(v1, v2, atol=atol)):
+                continue
+
+            yield v1
+
+        yield vertices[-1]
+
 
 class Cube:
 
-    def __init__(self, edge=1.):
-        self.edge = edge
-        # self.planes = self.create_planes()
+    def __init__(self, size=1.):
+        self.size = size
+        self.vertices = self.define_vertices()
+        self.planes = self.define_planes()
+        self.edges = self.define_edges()
+
+    def define_vertices(self):
+        vertices = np.array([
+            [0, 0, 0],
+            [0, 0, self.size],
+            [self.size, 0, 0],
+            [self.size, 0, self.size],
+            [self.size, self.size, 0],
+            [self.size, self.size, self.size],
+            [0, self.size, 0],
+            [0, self.size, self.size]
+        ])
+
+        return vertices
 
     def define_planes(self):
-        # Define the six faces of a cube (normal, point on the face)
+        """Define the six faces of a cube (normal, point on the face)
+        """
         planes = [
-            (np.array([0.0, 0.0, 1.0]), np.array([0., 0., 0.])),     # Z min
-            (np.array([0.0, 0.0, -1.0]), np.array([0., 0., self.edge])),  # Z max
-            (np.array([1.0, 0.0, 0.0]), np.array([0., 0., 0.])),     # X min
-            (np.array([-1.0, 0.0, 0.0]), np.array([self.edge, 0., 0.])),  # X max
-            (np.array([0.0, 1.0, 0.0]), np.array([0., 0., 0.])),     # Y min
-            (np.array([0.0, -1.0, 0.0]), np.array([0., self.edge, 0.])),  # Y max
+            (np.array([0.0, 0.0, 1.0]), self.vertices[0]),   # Z min
+            (np.array([0.0, 0.0, -1.0]), self.vertices[1]),  # Z max
+            (np.array([1.0, 0.0, 0.0]), self.vertices[0]),   # X min
+            (np.array([-1.0, 0.0, 0.0]), self.vertices[2]),  # X max
+            (np.array([0.0, 1.0, 0.0]), self.vertices[0]),   # Y min
+            (np.array([0.0, -1.0, 0.0]), self.vertices[6]),  # Y max
         ]
 
         return planes
 
     def define_edges(self):
-        vertices = np.array([
-            [0, 0, 0],
-            [0, 0, self.edge],
-            [self.edge, 0, 0],
-            [self.edge, 0, self.edge],
-            [self.edge, self.edge, 0],
-            [self.edge, self.edge, self.edge],
-            [0, self.edge, 0],
-            [0, self.edge, self.edge]
-        ])
-
         indices = [
             [5, 7], [7, 1], [1, 3], [3, 5],
             [4, 6], [6, 0], [0, 2], [2, 4],
@@ -99,12 +118,12 @@ class Cube:
             [1, 7], [7, 6], [6, 0], [0, 1]
         ]
 
-        edges = [vertices[idx] for idx in indices]
+        edges = [self.vertices[idx] for idx in indices]
         return edges
 
     def dummy_points(self, diff=0.5):
         lower = -diff
-        upper = self.edge + diff
+        upper = self.size + diff
         nums = (lower, 0, upper)
 
         for i in nums:
@@ -139,9 +158,7 @@ class Clipping(Polygon3DMixin):
                 sorted_verts = self.sort_3d_vertices_ccw(verts)
 
                 if clipped_polygon := self.sutherland_hodgman_3d(sorted_verts):
-                    clipped_polygon = np.array(clipped_polygon)
-
-                    # self.clipped_polygons.append(self.sort_3d_vertices_ccw(clipped_polygon))
+                    clipped_polygon = self.sort_3d_vertices_ccw(np.array(clipped_polygon))
 
                     yield (sorted_verts, clipped_polygon)
 
@@ -207,7 +224,7 @@ class Clipping(Polygon3DMixin):
 class Intersect(Polygon3DMixin):
 
     def __init__(self, cube):
-        self.cube_edges = cube.define_edges()
+        self.cube = cube
 
     def __call__(self, polygons):
         self.polygons = polygons
@@ -223,7 +240,7 @@ class Intersect(Polygon3DMixin):
                 p1 = np.array(polygon[i])
                 p2 = np.array(polygon[(i + 1) % len(polygon)])
 
-                for start, end in self.cube_edges:
+                for start, end in self.cube.edges:
                     if (intersection := self.get_intersection(
                             p1, p2, center, start, end, polygon)) is not None:
                         yield intersection
@@ -291,19 +308,106 @@ class Intersect(Polygon3DMixin):
         return area
 
 
+class Corners(Polygon3DMixin):
+
+    def __init__(self, cube, org_polygons, clipped_polygons, intersections):
+        self.cube = cube
+        self.org_polygons = org_polygons
+        self.clipped_polygons = clipped_polygons
+        self.intersections = intersections
+
+    def __iter__(self):
+        hull = ConvexHull(np.concatenate(self.org_polygons))
+        ipts = np.array(self.intersections)
+
+        for corner in self.cube.vertices:
+            # If the polyhedron contains a vertex before clipping, include that vertex.
+            if np.all(np.dot(hull.equations[:, :-1], corner) + hull.equations[:, -1] <= 1e-5):
+                yield corner
+                continue
+
+            # If vertices lies on three edges that form a corner, and the triangular face formed by
+            # those vertices is contained within the clipped polyhedron, include the vertex of the corner.
+            if len(x := ipts[(ipts[:, 1] == corner[1]) & (ipts[:, 2] == corner[2])]) > 0 and \
+                    len(y := ipts[(ipts[:, 0] == corner[0]) & (ipts[:, 2] == corner[2])]) > 0 and \
+                    len(z := ipts[(ipts[:, 0] == corner[0]) & (ipts[:, 1] == corner[1])]) > 0:
+
+                funcs = [np.min if corner[i] == 0 else np.max for i in range(3)]
+                tri = np.array([func(p, axis=0) for func, p in zip(funcs, [x, y, z])])
+
+                if not self.do_contain_face(tri):
+                    yield corner
+
+    def do_contain_face(self, tri):
+        """Check whether the clipped polyhedron contains the target triangular face
+           by comparing vertex coordinates.
+            Args:
+                tri (numpy.ndarray): The vertices of a triangle.
+        """
+        tri = self.sort_3d_vertices_ccw(tri)
+
+        # for polygon in self.clipped_polygons:
+        #     if len(polygon) == 3:
+        #         if np.allclose(polygon, tri, rtol=1e-05, atol=1e-15):
+        #             return False
+
+        return any(np.allclose(polygon, tri, rtol=1e-05, atol=1e-15)
+                   for polygon in self.clipped_polygons if len(polygon) == 3)
+        # #     return False
+
+        # return True
 
 
-class VoronoiGenerator3D:
+class Faces(Polygon3DMixin):
 
-    def __init__(self, cut_points=15, diff=0.5):
+    def __init__(self, clipped_polygons, intersections, corners):
+        self.clipped_polygons = clipped_polygons
+        self.intersections = intersections
+        self.corners = corners
+
+    def __iter__(self):
+        new_vertices = self.intersections + self.corners
+
+        for i in range(3):
+            for val in [0.0, 1.0]:
+                new_polygon = []
+
+                for polygon in self.clipped_polygons:
+
+                    for pv in polygon:
+                        for pi in self.intersections:
+                            if np.all(np.isclose(pv, pi, atol=1e-12)):
+                                pv[:] = pi[:]
+                                break
+
+                    if (vertices := polygon[polygon[:, i] == val]).size > 0:
+                        new_polygon.extend(vertices)
+
+                    if included := [v for v in new_vertices if v[i] == val]:
+                        new_polygon.extend(included)
+
+                if new_polygon:
+                    uq_vertices = np.unique(new_polygon, axis=0)
+                    sorted_vertices = self.sort_3d_vertices_ccw(uq_vertices)
+                    yield sorted_vertices
+        
+
+class VoronoiGenerator3D(Polygon3DMixin):
+
+    def __init__(self, cut_points=10, diff=0.5):
         self.cut_points = cut_points
         self.diff = diff
 
     def __iter__(self):
-        cube = Cube(edge=1.)
-        intersect = Intersect(cube) 
+        cube = Cube(size=1.)
+        intersect = Intersect(cube)
 
         pts = np.random.rand(self.cut_points, 3)
+        # pts = np.array([
+        #     [0.84497989, 0.3136216, 0.63398512],
+        #     [0.19015443, 0.2373259, 0.64581667]
+        # ])
+
         dummy_pts = np.array([pt for pt in cube.dummy_points()])
         all_pts = np.concatenate([pts, dummy_pts])
         vor = Voronoi(all_pts)
@@ -323,16 +427,50 @@ class VoronoiGenerator3D:
                     org_polygons.append(org)
                     clipped_polygons.append(clipped)
 
-                if len(intersections := [ip for ip in intersect(org_polygons)]) > 0:
-                    pass
+                corners = []
 
-               
+                if len(intersections := [ip for ip in intersect(org_polygons)]) > 0:
+                    intersections = [ip for ip in self.unique_close(np.unique(intersections, axis=0))]
+                    corners = [c for c in Corners(cube, org_polygons, clipped_polygons, intersections)]
+
+                if new_polygons := [poly for poly in Faces(clipped_polygons, intersections, corners)]:
+                    clipped_polygons.extend(new_polygons)
+
+                yield clipped_polygons
+
+
+
+def main():
+    start = time.perf_counter()
+    polyhedrons = [polyhedron for polyhedron in VoronoiGenerator3D(cut_points=30)]
+    print(f'Took {time.perf_counter() - start}')  # Took 2.6943330999984028
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')  # 1行目1列の1番目という意味で、subplot(1,1,1)でも同じ
+
+    for poly in polyhedrons:
+    # for poly in new_polyhedrons:
+        polygon = Poly3DCollection(
+            poly,
+            alpha=0.6,
+            facecolors=np.random.uniform(0, 1, 3),
+            linewidth=0.8,
+            edgecolors='gray'
+        )
+        ax.add_collection3d(polygon)
+
+    ax.set_xlim([0, 1.])
+    ax.set_ylim([0, 1.])
+    ax.set_zlim([0, 1.])
+    plt.show()
+
 
 
 
 
 if __name__ == '__main__':
-    cube = Cube()
-    cube.define_edges()
+    main()
+    # cube = Cube()
+    # cube.define_edges()
     # pts = [n for n in cube.dummy_points()]
     # print(pts)
