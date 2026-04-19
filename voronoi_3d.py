@@ -1,14 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.spatial import Voronoi, ConvexHull, Delaunay
+from scipy.spatial import Voronoi, ConvexHull
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
-from scipy.spatial import cKDTree
-from scipy.stats import qmc
-import math
 
-from sympy import Point3D, Plane, Polygon, Segment3D, Symbol
-from sympy.geometry.entity import GeometryEntity 
-import pprint
 import time
 
 
@@ -23,7 +17,6 @@ class Polygon3DMixin:
          Returns:
             numpy.ndarray: The sorted vertices.
         """
-        # vertices = np.array(vertices)
         center = np.mean(vertices, axis=0)
 
         # Determine the normal vector of the plane using SVD or cross product.
@@ -34,14 +27,12 @@ class Polygon3DMixin:
         normal = V[2, :]
 
         # Project to a local 2D plane.
-        if abs(normal[0]) > abs(normal[1]):
-            ref_vec = np.array([0., 1., 0.])
-        else:
-            ref_vec = np.array([1., 0., 0.])
+        ref_vec = [0., 1., 0.] if abs(normal[0]) > abs(normal[1]) else [1., 0., 0.]
+        u = self.cross(normal, ref_vec)
 
-        u = np.cross(normal, ref_vec)
-        u /= np.linalg.norm(u)
-        v = np.cross(normal, u)  # v is orthogonal to both normal and u
+        norm = (u[0] ** 2 + u[1] ** 2 + u[2] ** 2) ** 0.5
+        u /= norm
+        v = self.cross(normal, u)
 
         # Project the centered points onto the (u, v) plane
         projected_2d = np.array([[np.dot(p, u), np.dot(p, v)] for p in P])
@@ -70,6 +61,16 @@ class Polygon3DMixin:
             yield v1
 
         yield vertices[-1]
+
+    def cross(self, a, b):
+        """Using numpy.cross on a small numpy.ndarray with shape=(3, ) caused performance issues,
+           so use the Python implementation of cross instead.
+        """
+        return np.array([
+            a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0]
+        ])
 
 
 class Cube:
@@ -140,16 +141,13 @@ class Clipping(Polygon3DMixin):
 
     def __init__(self, vor, cube):
         self.vor = vor
-        # self.clipped_polygons = None
-        self.cube_planes = cube.define_planes()
+        self.cube = cube
 
     def __call__(self, region):
         self.region = region
         return self
 
     def __iter__(self):
-        # self.clipped_polygons = []
-
         # vor.ridge_vertices: Indices of the Voronoi vertices forming each Voronoi ridge.
         for rv in self.vor.ridge_vertices:
             if np.isin(rv, self.region).all():
@@ -159,21 +157,18 @@ class Clipping(Polygon3DMixin):
 
                 if clipped_polygon := self.sutherland_hodgman_3d(sorted_verts):
                     clipped_polygon = self.sort_3d_vertices_ccw(np.array(clipped_polygon))
-
                     yield (sorted_verts, clipped_polygon)
 
     def sutherland_hodgman_3d(self, polygon):
         clipped_polygon = polygon
 
-        for normal, point in self.cube_planes:
+        for normal, point in self.cube.planes:
             if not (clipped_polygon := [p for p in self.clip(clipped_polygon, normal, point)]):
                 break
 
         return clipped_polygon
 
     def clip(self, polygon, plane_normal, plane_point):
-        # new_polygon = []
-
         for i, p1 in enumerate(polygon):
             p2 = np.array(polygon[(i + 1) % len(polygon)])
 
@@ -183,21 +178,15 @@ class Clipping(Polygon3DMixin):
             if p1_inside and p2_inside:
                 # Both inner sides: Add only t he endpoint.
                 yield self.round_off(p2)
-                # new_polygon.append(self.round_off(p2))
             elif p1_inside and not p2_inside:
                 # From the inside to outside: Add an intersection.
                 yield self.intersection(p1, p2, plane_normal, plane_point)
-                # new_polygon.append(self.intersection(p1, p2, plane_normal, plane_point))
             elif not p1_inside and p2_inside:
                 # From the outside to inside: Add intersection and p2.
                 yield self.intersection(p1, p2, plane_normal, plane_point)
                 yield self.round_off(p2)
-                # new_polygon.append(self.intersection(p1, p2, plane_normal, plane_point))
-                # new_polygon.append(self.round_off(p2))
             else:
                 pass
-
-        # return new_polygon
 
     def is_inside(self, p, plane_normal, plane_point, tolerance=1e-6):
         """Determine whether a point lies on the inside of a plane.
@@ -209,11 +198,11 @@ class Clipping(Polygon3DMixin):
         if dot_product > 0:
             return True
 
-    def intersection(self, p1, p2, plane_normal, plane_point):
+    def intersection(self, p1, p2, plane_normal, plane_point, tolerance=1e-6):
         """Calculate the intersection of a line passing through two points and a plane.
         """
         denom = np.dot(p2 - p1, plane_normal)
-        if abs(denom) < 1e-6:
+        if abs(denom) < tolerance:
             return p1
 
         t = np.dot(plane_point - p1, plane_normal) / denom
@@ -223,22 +212,16 @@ class Clipping(Polygon3DMixin):
 
 class Intersect(Polygon3DMixin):
 
-    def __init__(self, cube):
+    def __init__(self, polygons, cube):
+        self.polygons = polygons
         self.cube = cube
 
-    def __call__(self, polygons):
-        self.polygons = polygons
-        return self
-
     def __iter__(self):
-        # results = []
-
         for polygon in self.polygons:
-            center = np.sum(polygon, axis=0) / len(polygon)
+            center = np.mean(polygon, axis=0)
 
-            for i in range(len(polygon)):
-                p1 = np.array(polygon[i])
-                p2 = np.array(polygon[(i + 1) % len(polygon)])
+            for i, p1 in enumerate(polygon):
+                p2 = polygon[(i + 1) % len(polygon)]
 
                 for start, end in self.cube.edges:
                     if (intersection := self.get_intersection(
@@ -248,7 +231,7 @@ class Intersect(Polygon3DMixin):
     def get_intersection(self, p1, p2, center, l1, l2, polygon):
         if (intersection := self.intersect_line_plane(p1, p2, center, l1, l2)) is not None:
             if self.is_inside_plane(intersection, polygon):
-                return self.round_off(intersection)
+                return intersection
 
         return None
 
@@ -257,15 +240,15 @@ class Intersect(Polygon3DMixin):
         e2 = v2 - v0
 
         d = p2 - p1
-        # 平面法線
-        n = np.cross(e1, e2)
+        # Plane normal
+        n = self.cross(e1, e2)
 
-        # 線分と平面の交差判定
+        # Checking for intersection between a line segment and a plane.
         det = np.dot(d, n)
         if abs(det) < 1e-6:
             return None
 
-        # 平面上の交点までの距離
+        # Distance to the intersection on the plane
         t = np.dot(v0 - p1, n) / det
         if t < 0.0 or t > 1.0:
             return None
@@ -278,32 +261,23 @@ class Intersect(Polygon3DMixin):
         area_polygon = self.calc_polygon_area(polygon)
         area_target = sum(self.calc_triangle_area(
             intersection, polygon[i], polygon[(i + 1) % size]) for i in range(size))
-        # area = 0
 
-        # for i in range(len(polygon)):
-        #     p1 = np.array(polygon[i])
-        #     p2 = np.array(polygon[(i + 1) % len(polygon)])
-        #     area += calc_triangle_area(intersection, p1, p2)
-
-        # if abs(area - area_polygon) < tolerance:
         if abs(area_target - area_polygon) < tolerance:
             return True
 
     def calc_triangle_area(self, p0, p1, p2):
         v1 = p1 - p0
         v2 = p2 - p0
-        c = np.cross(v1, v2)
-        area = sum(c ** 2) ** 0.5
+
+        c = self.cross(v1, v2)
+        area = (c[0] ** 2 + c[1] ** 2 + c[2] ** 2) ** 0.5
+
         return area
 
     def calc_polygon_area(self, polygon):
         p0 = polygon[0]
         area = sum(self.calc_triangle_area(p0, polygon[i], polygon[i + 1])
                    for i in range(1, len(polygon) - 1))
-        # area = 0
-
-        # for i in range(1, len(polygon) - 1):
-        #     area += self.calc_triangle_area(p0, polygon[i], polygon[i + 1])
 
         return area
 
@@ -346,16 +320,8 @@ class Corners(Polygon3DMixin):
         """
         tri = self.sort_3d_vertices_ccw(tri)
 
-        # for polygon in self.clipped_polygons:
-        #     if len(polygon) == 3:
-        #         if np.allclose(polygon, tri, rtol=1e-05, atol=1e-15):
-        #             return False
-
         return any(np.allclose(polygon, tri, rtol=1e-05, atol=1e-15)
                    for polygon in self.clipped_polygons if len(polygon) == 3)
-        # #     return False
-
-        # return True
 
 
 class Faces(Polygon3DMixin):
@@ -390,7 +356,7 @@ class Faces(Polygon3DMixin):
                     uq_vertices = np.unique(new_polygon, axis=0)
                     sorted_vertices = self.sort_3d_vertices_ccw(uq_vertices)
                     yield sorted_vertices
-        
+
 
 class VoronoiGenerator3D(Polygon3DMixin):
 
@@ -400,8 +366,6 @@ class VoronoiGenerator3D(Polygon3DMixin):
 
     def __iter__(self):
         cube = Cube(size=1.)
-        intersect = Intersect(cube)
-
         pts = np.random.rand(self.cut_points, 3)
         # pts = np.array([
         #     [0.84497989, 0.3136216, 0.63398512],
@@ -419,25 +383,20 @@ class VoronoiGenerator3D(Polygon3DMixin):
             region = vor.regions[region_index]
 
             if -1 not in region and len(region) > 0:
-                # org_polygon, clipped_polygon = zip(*((org, clipped) for org, clipped in clipping(region)))
-                org_polygons = []
-                clipped_polygons = []
+                polygons_clipped, polygons_original, corners = [], [], []
 
                 for org, clipped in clipping(region):
-                    org_polygons.append(org)
-                    clipped_polygons.append(clipped)
+                    polygons_clipped.append(clipped)
+                    polygons_original.append(org)
 
-                corners = []
-
-                if len(intersections := [ip for ip in intersect(org_polygons)]) > 0:
+                if len(intersections := [ip for ip in Intersect(polygons_original, cube)]) > 0:
                     intersections = [ip for ip in self.unique_close(np.unique(intersections, axis=0))]
-                    corners = [c for c in Corners(cube, org_polygons, clipped_polygons, intersections)]
+                    corners = [c for c in Corners(cube, polygons_original, polygons_clipped, intersections)]
 
-                if new_polygons := [poly for poly in Faces(clipped_polygons, intersections, corners)]:
-                    clipped_polygons.extend(new_polygons)
+                if new_polygons := [poly for poly in Faces(polygons_clipped, intersections, corners)]:
+                    polygons_clipped.extend(new_polygons)
 
-                yield clipped_polygons
-
+                yield polygons_clipped
 
 
 def main():
@@ -463,9 +422,6 @@ def main():
     ax.set_ylim([0, 1.])
     ax.set_zlim([0, 1.])
     plt.show()
-
-
-
 
 
 if __name__ == '__main__':
