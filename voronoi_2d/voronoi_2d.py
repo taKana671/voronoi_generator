@@ -37,6 +37,8 @@ class BoundedVoronoiGenerator:
 
 
 class ConvexPolygonGenerator:
+    """A class to partition a general convex polygon, other than a square, into a Voronoi cell
+    """
 
     def __init__(self, bnd):
         self.bnd = bnd
