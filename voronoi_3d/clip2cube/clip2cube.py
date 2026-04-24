@@ -8,6 +8,12 @@ NDIGITS = 8
 
 
 class Cube:
+    """A class representing a clipping region.
+
+        Args:
+            cube_size (float): length of a cube's edge.
+            diff (float): how far from the vertices of the cube the dummy points should be placed.
+    """
 
     def __init__(self, size=1., diff=.5):
         self.size = size
@@ -71,7 +77,12 @@ class Cube:
 
 
 class Clipping(Polygon3DMixin):
-    """A class to clip a cube with edges in the range of 0 to 1
+    """A class that uses the Sutherland-Hodgman algorithm to generate the vertex coordinates
+       of a voronoi cell (polyhedron) clipped to a cube.
+
+        Arges:
+            vor (scipy.spatial._qhull.voronoi): the voronoi diagram.
+            cube (Cube): clipping region.
     """
 
     def __init__(self, vor, cube):
@@ -83,10 +94,10 @@ class Clipping(Polygon3DMixin):
         return self
 
     def __iter__(self):
-        # vor.ridge_vertices are indices of the Voronoi vertices forming each Voronoi ridge.
+        # vor.ridge_vertices are indices of the voronoi vertices forming each voronoi ridge.
         for rv in self.vor.ridge_vertices:
             if np.isin(rv, self.region).all():
-                # vor.vertices are coordinates of the Voronoi vertices.
+                # vor.vertices are coordinates of the voronoi vertices.
                 verts = self.round_off(self.vor.vertices[rv], NDIGITS)
                 sorted_verts = self.sort_3d_vertices_ccw(verts)
 
@@ -146,6 +157,14 @@ class Clipping(Polygon3DMixin):
 
 
 class Intersect(Polygon3DMixin):
+    """A class that generates the coordinates of the points where each edge of the
+       clipping region's cube intersects with the faces of the voronoi cell.
+
+        Args:
+            polygons (list): a list of numpy.ndarray.
+                Vertex coordinates for each face of a voronoi cell (polyhedron).
+            cube (Cube): clipping region.
+    """
 
     def __init__(self, polygons, cube):
         self.polygons = polygons
@@ -209,6 +228,19 @@ class Intersect(Polygon3DMixin):
 
 
 class Corners(Polygon3DMixin):
+    """A class that determines whether to include the vertices of a cube's corners
+       in a voronoi cell (polyhedron) and, if so, generates those vertices.
+
+        Args:
+            cube (Cube): clipping region.
+            org_polygons (list): a list of numpy.ndarray.
+                The vertex coordinates of the voronoi cell (polyhedron) before clipping.
+            clipped_polygons (list): a list of numpy.ndarray.
+                The vertex coordinates of a voronoi cell (polyhedron) clipped to a cube.
+            ints (list): a list of numpy.ndarray.
+                The Vertex coordinates where each edge of the clipping region's cube intersects.
+                with the faces of the voronoi cell  (polyhedron).
+    """
 
     def __init__(self, cube, org_polygons, clipped_polygons, ints):
         self.cube = cube
@@ -242,7 +274,7 @@ class Corners(Polygon3DMixin):
         """Check whether the clipped polyhedron contains the target triangular face
            by comparing vertex coordinates.
             Args:
-                tri (numpy.ndarray): The vertices of a triangle.
+                tri (numpy.ndarray): the vertices of a triangle.
         """
         tri = self.sort_3d_vertices_ccw(tri)
 
@@ -251,6 +283,19 @@ class Corners(Polygon3DMixin):
 
 
 class Faces(Polygon3DMixin):
+    """A class that generates the vertex coordinates of any non-closed faces
+       on a voronoi cell (polyhedron).
+
+        Args:
+            clipped_polygons (list): a list of numpy.ndarray.
+                The vertex coordinates of a voronoi cell (polyhedron) clipped to a cube.
+            ints (list): a list of numpy.ndarray.
+                The Vertex coordinates where each edge of the clipping region's cube intersects
+                with the faces of the voronoi cell  (polyhedron).
+            corners (list): a list of numpy.ndarray.
+                The vertex coordinates of the corners of the cubes added to the voronoi cells (polyhedra).
+            cube (Cube): clipping region.
+    """
 
     def __init__(self, clipped_polygons, ints, corners, cube):
         self.clipped_polygons = clipped_polygons
@@ -286,6 +331,13 @@ class Faces(Polygon3DMixin):
 
 
 class VoronoiClipped2Cube(Polygon3DMixin):
+    """A class that generates vertex coordinates for each voronoi cell clipped to a cube.
+
+        Args:
+            cut_points(int): the number of polyhedrons to divide a cube into.
+            cube_size (float): length of a cube's edge.
+            diff (float): how far from the vertices of the cube the dummy points should be placed.
+    """
 
     def __init__(self, cut_points=10, cube_size=1., diff=0.5):
         self.cut_points = cut_points
@@ -300,9 +352,9 @@ class VoronoiClipped2Cube(Polygon3DMixin):
         vor = Voronoi(all_pts)
         clipping = Clipping(vor, self.cube)
 
-        # Index of the Voronoi region for each input point
+        # Index of the voronoi region for each input point
         for region_index in vor.point_region:
-            # Indices of the Voronoi vertices forming each Voronoi region.
+            # Indices of the voronoi vertices forming each voronoi region.
             region = vor.regions[region_index]
 
             if -1 not in region and len(region) > 0:
