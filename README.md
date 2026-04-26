@@ -16,49 +16,6 @@ A submodule that uses SciPy's `scipy.spatial.Voronoi` to compute 2D or 3D Vorono
 
 # Modules
 
-## voronoi_2d
-
-Using `SciPy` and `Shapely`, generate a Voronoi diagram, then clip the 2D Voronoi regions to a square (or arbitrary rectangle) area.<br>
-In [VoronoiCity2](https://github.com/taKana671/VoronoiCity2), 3D models are generated from Voronoi polygons to create a city.<br>
-The visualization results are as follows.
-
-<img width="865" height="360" alt="Image" src="https://github.com/user-attachments/assets/ff73ca15-8932-418a-b2ea-9b12388fab76" />
-
-<pre>
-  def visualize1():
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-
-    for region in BoundedVoronoiGenerator(cnt_points=20, shrink=0.):
-        ax.add_patch(Polygon(region, facecolor=np.random.uniform(0, 1, 3), alpha=0.6, edgecolor='gray'))
-
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, 1)
-    plt.show()
-
-
-  def visualize2():
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-
-    polygon = np.array([
-        [0.57122648, 0.26608489],
-        [0.37531127, 0.42911859],
-        [0.45373198, 0.73934282],
-        [0.64410673, 0.67292705],
-        [0.62157049, 0.3502432]
-    ])
-
-    pts = [pt for pt in ConvexPolygonGenerator(polygon)]
-    for region in BoundedVoronoiGenerator(pts=pts, bnd=polygon, shrink=0):
-        ax.add_patch(Polygon(region, facecolor=np.random.uniform(0, 1, 3), alpha=0.6, edgecolor='gray'))
-
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, 1)
-    plt.show()
-</pre>
-
-
 ## voronoi_3d
 
 ### clip2cube
@@ -101,3 +58,44 @@ def visualize(cut_points=30, cube_size=1., diff=.5, alpha=.6):
     plt.show()
 </pre>
 
+## voronoi_2d
+
+Using `SciPy` and `Shapely`, generate a Voronoi diagram, then clip the 2D Voronoi regions to a square (or arbitrary rectangle) area.<br>
+In [VoronoiCity2](https://github.com/taKana671/VoronoiCity2), 3D models are generated from Voronoi polygons to create a city.<br>
+The visualization results are as follows.
+
+<img width="865" height="360" alt="Image" src="https://github.com/user-attachments/assets/ff73ca15-8932-418a-b2ea-9b12388fab76" />
+
+<pre>
+  def visualize1():
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+
+    for region in BoundedVoronoiGenerator(cnt_points=20, shrink=0.):
+        ax.add_patch(Polygon(region, facecolor=np.random.uniform(0, 1, 3), alpha=0.6, edgecolor='gray'))
+
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    plt.show()
+
+
+  def visualize2():
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+
+    polygon = np.array([
+        [0.57122648, 0.26608489],
+        [0.37531127, 0.42911859],
+        [0.45373198, 0.73934282],
+        [0.64410673, 0.67292705],
+        [0.62157049, 0.3502432]
+    ])
+
+    pts = [pt for pt in ConvexPolygonGenerator(polygon)]
+    for region in BoundedVoronoiGenerator(pts=pts, bnd=polygon, shrink=0):
+        ax.add_patch(Polygon(region, facecolor=np.random.uniform(0, 1, 3), alpha=0.6, edgecolor='gray'))
+
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    plt.show()
+</pre>
