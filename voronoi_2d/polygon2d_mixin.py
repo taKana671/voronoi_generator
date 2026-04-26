@@ -2,7 +2,7 @@ import numpy as np
 from shapely.constructive import maximum_inscribed_circle
 from shapely.geometry import Polygon
 
-from polygon_mixin import PolygonMixin
+from ..polygon_mixin import PolygonMixin
 
 
 class Polygon2DMixin(PolygonMixin):
