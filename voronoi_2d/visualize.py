@@ -13,7 +13,7 @@ def visualize(pts=None, bnd=None, cnt_points=10):
         ax.add_patch(Polygon(
             region,
             facecolor=np.random.uniform(0, 1, 3),
-            alpha=0.8,
+            alpha=0.6,
             edgecolor='gray')
         )
 
