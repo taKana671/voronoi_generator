@@ -33,7 +33,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
-from voronoi_generator.voronoi_3d.clip2cube.clip2cube import VoronoiClipped2Cube
+from voronoi_generator.voronoi_3d.clip2cube import VoronoiClipped2Cube
 
 
 def visualize(cut_points=30, cube_size=1., diff=.5, alpha=.6):
@@ -67,6 +67,13 @@ The visualization results are as follows.
 <img width="865" height="360" alt="Image" src="https://github.com/user-attachments/assets/ff73ca15-8932-418a-b2ea-9b12388fab76" />
 
 <pre>
+  import numpy as np
+  import matplotlib.pyplot as plt
+  from matplotlib.patches import Polygon
+  
+  from voronoi_generator.voronoi_2d import BoundedVoronoiGenerator, ConvexPolygonGenerator
+
+  
   def visualize1():
     fig = plt.figure()
     ax = fig.add_subplot(111)
