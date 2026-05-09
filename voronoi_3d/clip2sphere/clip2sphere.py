@@ -1,488 +1,142 @@
 import numpy as np
-from scipy.spatial import Voronoi, ConvexHull
+from scipy.spatial import Voronoi
 
 from ..polygon3d_mixin import Polygon3DMixin
 from pprint import pprint
 
 NDIGITS = 8
 
+# np.seterr(all='raise')
 
-class Cube:
-    """A class representing a clipping region.
+
+class Sphere:
+    """A class representing a clipping spherical region.
 
         Args:
-            cube_size (float): length of a cube's edge.
-            diff (float): how far from the vertices of the cube the dummy points should be placed.
+            center (numpy.ndarray): the center of a sphere.
+            radius (float): the sphere radius.
     """
 
-    def __init__(self, size=2., diff=.5):
-        self.size = size
-        # self.size = 3
-        self.diff = diff
-        self.vertices = self.define_vertices()
-        self.planes = self.define_planes()
-        self.edges = self.define_edges()
+    def __init__(self, center, radius):
+        self.center = center
+        self.radius = radius
 
-    def define_vertices(self):
-        vertices = np.array([
-            [0, 0, 0],
-            [0, 0, self.size],
-            [self.size, 0, 0],
-            [self.size, 0, self.size],
-            [self.size, self.size, 0],
-            [self.size, self.size, self.size],
-            [0, self.size, 0],
-            [0, self.size, self.size]
-        ])
+    def dummy_points(self, num_points=30, buffer_rate=2.):
+        # Make the radius larger than that of the center sphere.
+        dummy_radius = self.radius * buffer_rate
 
-        return vertices
+        # Generate points randomly (normalized using a normal distribution).
+        points = np.random.randn(num_points, 3)
+        points /= np.linalg.norm(points, axis=1)[:, np.newaxis]
 
-    def define_planes(self):
-        """Define the six faces of a cube (normal, point on the face)
+        dummy_points = points * dummy_radius + np.array(self.center)
+        return dummy_points
+
+    def is_inside(self, pt):
+        """Returns True if the coordinates of a point lie inside the sphere, and False otherwise.
+            pt (numpy.ndarray): the coordinates of a point
         """
-        planes = [
-            (np.array([0.0, 0.0, 1.0]), self.vertices[0]),   # Z min
-            (np.array([0.0, 0.0, -1.0]), self.vertices[1]),  # Z max
-            (np.array([1.0, 0.0, 0.0]), self.vertices[0]),   # X min
-            (np.array([-1.0, 0.0, 0.0]), self.vertices[2]),  # X max
-            (np.array([0.0, 1.0, 0.0]), self.vertices[0]),   # Y min
-            (np.array([0.0, -1.0, 0.0]), self.vertices[6]),  # Y max
-        ]
+        return sum((pt[i] - self.center[i]) ** 2 for i in range(3)) ** 0.5 <= self.radius ** 2
 
-        return planes
+    def intersect(self, p1, p2):
+        d = p2 - p1
+        f = p1 - self.center
 
-    def define_edges(self):
-        indices = [
-            [5, 7], [7, 1], [1, 3], [3, 5],
-            [4, 6], [6, 0], [0, 2], [2, 4],
-            [3, 1], [1, 0], [0, 2], [2, 3],
-            [5, 3], [3, 2], [2, 4], [4, 5],
-            [5, 7], [7, 6], [6, 4], [4, 5],
-            [1, 7], [7, 6], [6, 0], [0, 1]
-        ]
+        a = np.dot(d, d)
+        b = 2 * np.dot(f, d)
+        c = np.dot(f, f) - self.radius ** 2
 
-        edges = [self.vertices[idx] for idx in indices]
-        return edges
+        discriminant = b ** 2 - 4 * a * c
 
-    def dummy_points(self):
-        lower = -self.diff
-        upper = self.size + self.diff
-        nums = (lower, 0, upper)
+        if discriminant < 0:
+            return None
 
-        for i in nums:
-            for j in nums:
-                for k in nums:
-                    if i == 0 and j == 0 and k == 0:
-                        continue
-                    yield (i, j, k)
+        sqrt_disc = discriminant ** 0.5
+        t1 = (-b - sqrt_disc) / (2 * a)
+        t2 = (-b + sqrt_disc) / (2 * a)
+
+        for t in [t1, t2]:
+            if 0 <= t <= 1:
+                return p1 + t * d
+
+        return None
 
 
 class Clipping(Polygon3DMixin):
     """A class that uses the Sutherland-Hodgman algorithm to generate the vertex coordinates
-       of a voronoi cell (polyhedron) clipped to a cube.
+       of a voronoi cell (polyhedron) clipped to a sphere.
 
         Arges:
             vor (scipy.spatial._qhull.voronoi): the voronoi diagram.
-            cube (Cube): clipping region.
+            sphere (Sphere): clipping region.
     """
 
-    def __init__(self, vor, cube):
+    def __init__(self, vor, sphere):
         self.vor = vor
-        self.cube = cube
+        self.sphere = sphere
 
     def __call__(self, region):
         self.region = region
         return self
 
     def __iter__(self):
-        # vor.ridge_vertices are indices of the voronoi vertices forming each voronoi ridge.
+        """Generate the vertices of a polygon clipped to a sphere
+           and the intersection points between the polygon and the sphere.
+        """
         for rv in self.vor.ridge_vertices:
+            # rv means indices of the voronoi vertices forming each voronoi ridge.
             if np.isin(rv, self.region).all():
-                # vor.vertices are coordinates of the voronoi vertices.
-                verts = self.round_off(self.vor.vertices[rv], NDIGITS)
-                sorted_verts = self.sort_3d_vertices_ccw(verts)
+                sorted_verts = self.sort_3d_vertices_ccw(self.vor.vertices[rv])
+                clipped_verts, do_intersects = [], []
 
-                clipped_verts, section = self.sutherland_hodgman_3d(sorted_verts)
-
-                if section:
-                    section = self.round_off(np.array(section), NDIGITS)
+                for pt, pt_or_ip in self.clip(sorted_verts):
+                    clipped_verts.append(pt)
+                    do_intersects.append(pt_or_ip)
 
                 if clipped_verts:
                     clipped_verts = self.round_off(np.array(clipped_verts), NDIGITS)
+
+                    mask = np.array(do_intersects)
+                    intersections = clipped_verts[mask]
+
                     clipped_verts = self.sort_3d_vertices_ccw(clipped_verts)
 
-                # if clipped_verts := self.sutherland_hodgman_3d(sorted_verts):
-                #     clipped_verts = self.round_off(np.array(clipped_verts), NDIGITS)
-                #     sorted_clipped_verts = self.sort_3d_vertices_ccw(clipped_verts)
+                    yield (clipped_verts, intersections)
 
-                yield (list(section), list(clipped_verts))
-
-    def sutherland_hodgman_3d(self, vertices):
-        clipped_verts = []
-        section = []
-
-        for pt, is_intersection in self.clip(vertices):
-            if is_intersection:
-                section.append(pt)
-
-            clipped_verts.append(pt)
-
-
-
-        # for normal, point in self.cube.planes:
-        #     if not (clipped_verts := [p for p in self.clip(clipped_verts, normal, point)]):
-        #         break
-        # import pdb; pdb.set_trace()
-        return clipped_verts, section
-
-    # def clip(self, vertices, plane_normal, plane_point):
     def clip(self, vertices):
+        """Clipping by using the 3D version of the Sutherland-Hodgman algorithm.
+           If a line segment consisting of two vertices of a polygon (in counterclockwise order)
+           intersects a sphere, return the intersection point and True.
+           If there is no intersection, return the starting point and False.
+
+            Args:
+                vertices (numpy.ndarray): vertices of a 3D polygon; sorted in counterclockwise order.
+        """
         length = len(vertices)
-        center = np.array([1, 1, 1])
-        radius = 1.
 
         for i, p1 in enumerate(vertices):
-            # import pdb; pdb.set_trace()
-            p2 = np.array(vertices[(i + 1) % length])   ##### vertices[(i + 1) % length]ですでにnp.ndarray
+            p2 = vertices[(i + 1) % length]
 
-            p1_inside, p2_inside = False, False
-
-            if ((p1[0] - center[0]) ** 2 + (p1[1] - center[1]) ** 2 + (p1[2] - center[2]) ** 2) <= 1:
-                p1_inside = True
-
-            if ((p2[0] - center[0]) ** 2 + (p2[1] - center[1]) ** 2 + (p2[2] - center[2]) ** 2) <= 1:
-                p2_inside = True
+            p1_inside = self.sphere.is_inside(p1)
+            p2_inside = self.sphere.is_inside(p2)
 
             if p1_inside and p2_inside:
-                # Both inner sides: Add only t he endpoint.
-                yield (p2, False) 
+                # Both inner sides: Add only the endpoint.
+                yield (p2, False)
+
             elif p1_inside and not p2_inside:
                 # From the inside to outside: Add an intersection.
-                if ips := self.intersect_sphere(p1, p2, center, radius):
-                    yield (ips[0], True)
+                ip = self.sphere.intersect(p1, p2)
+                yield (ip, True)
 
             elif not p1_inside and p2_inside:
                 # From the outside to inside: Add intersection and p2.
-                if ips := self.intersect_sphere(p1, p2, center, radius):
-                    yield (ips[0], True)
+                ip = self.sphere.intersect(p1, p2)
+                yield (ip, True)
                 yield (p2, False)
             else:
+                # Both outside: Do nothing.
                 pass
-                # if ips := self.intersect_sphere(p1, p2, center, radius):
-                #     yield (ips[0], True)
-                #     yield (ips[1], True)
-                #     print(p1, p2, ips)
-                    # import pdb; pdb.set_trace()
-
-
-            # print(self.intersect_sphere(p1, p2, np.array([1, 1, 1]), 1))
-
-
-            # p1_inside = self.is_inside(p1, plane_normal, plane_point)
-            # p2_inside = self.is_inside(p2, plane_normal, plane_point)
-
-            # if p1_inside and p2_inside:
-            #     # Both inner sides: Add only t he endpoint.
-            #     yield p2
-            # elif p1_inside and not p2_inside:
-            #     # From the inside to outside: Add an intersection.
-            #     yield self.intersection(p1, p2, plane_normal, plane_point)
-            # elif not p1_inside and p2_inside:
-            #     # From the outside to inside: Add intersection and p2.
-            #     yield self.intersection(p1, p2, plane_normal, plane_point)
-            #     yield p2
-            # else:
-            #     pass
-
-    def is_inside(self, p, plane_normal, plane_point):
-        """Determine whether a point lies on the inside of a plane.
-        """
-        dot_product = np.dot(p - plane_point, plane_normal)
-        return dot_product >= 0
-
-    def intersection(self, p1, p2, plane_normal, plane_point):
-        """Calculate the intersection of a line passing through two points and a plane.
-        """
-        denom = np.dot(p2 - p1, plane_normal)
-        if abs(denom) < 1e-6:
-            return p1
-
-        t = np.dot(plane_point - p1, plane_normal) / denom
-
-        return p1 + t * (p2 - p1)
-
-    
-    
-    def intersect_sphere2(self, p1, p2, center, radius):
-        d = p2 - p1
-        f = p1 - center
-
-        # 二次方程式 at^2 + bt + c = 0 の係数
-        a = np.dot(d, d)
-        b = 2 * np.dot(f, d)
-        c = np.dot(f, f) - radius ** 2
-
-        discriminant = b ** 2 - 4 * a * c
-        intersections = []
-
-        if discriminant < 0:
-            return intersections
-
-        sqrt_disc = discriminant ** 0.5
-        t1 = (-b - sqrt_disc) / (2 * a)
-        t2 = (-b + sqrt_disc) / (2 * a)
-
-        for t in [t1, t2]:
-            if 0 <= t <= 1:
-                intersections.append(p1 + t * d)
-
-        return intersections
-
-    def intersect_sphere(self, p1, p2, center, radius):
-        d = p2 - p1
-        f = p1 - center
-
-        # 二次方程式 at^2 + bt + c = 0 の係数
-        a = np.dot(d, d)
-        b = 2 * np.dot(f, d)
-        c = np.dot(f, f) - radius ** 2
-
-        discriminant = b ** 2 - 4 * a * c
-        intersections = []
-
-        if discriminant < 0:
-            return intersections
-
-        sqrt_disc = discriminant ** 0.5
-        t1 = (-b - sqrt_disc) / (2 * a)
-        t2 = (-b + sqrt_disc) / (2 * a)
-
-        for t in [t1, t2]:
-            if 0 <= t <= 1:
-                intersections.append(p1 + t * d)
-
-        return intersections
-
-
-class Intersect(Polygon3DMixin):
-    """A class that generates the coordinates of the points where each edge of the
-       clipping region's cube intersects with the faces of the voronoi cell.
-
-        Args:
-            polygons (list): a list of numpy.ndarray.
-                Vertex coordinates for each face of a voronoi cell (polyhedron).
-            cube (Cube): clipping region.
-    """
-
-    def __init__(self, polygons, cube):
-        self.polygons = polygons
-        self.cube = cube
-
-    def __iter__(self):
-        for polygon in self.polygons:
-            center = np.mean(polygon, axis=0)
-
-            for i, p1 in enumerate(polygon):
-                p2 = polygon[(i + 1) % len(polygon)]
-
-                for start, end in self.cube.edges:
-                    if (ip := self.intersect_line_plane(p1, p2, center, start, end)) is not None:
-                        if self.is_inside_plane(ip, polygon):
-                            yield ip
-
-    def intersect_line_plane(self, v0, v1, v2, p1, p2):
-        e1 = v1 - v0
-        e2 = v2 - v0
-
-        d = p2 - p1
-        # Plane normal
-        n = self.cross(e1, e2)
-
-        # Checking for intersection between a line segment and a plane.
-        det = np.dot(d, n)
-        if abs(det) < 1e-6:
-            return None
-
-        # Distance to the intersection on the plane
-        t = np.dot(v0 - p1, n) / det
-        if t < 0.0 or t > 1.0:
-            return None
-
-        return p1 + t * d
-
-    def is_inside_plane(self, ip, polygon, tolerance=1e-6):
-        size = len(polygon)
-        area_polygon = self.calc_polygon_area(polygon)
-        area_target = sum(self.calc_triangle_area(
-            ip, polygon[i], polygon[(i + 1) % size]) for i in range(size))
-
-        if abs(area_target - area_polygon) < tolerance:
-            return True
-
-    def calc_triangle_area(self, p0, p1, p2):
-        v1 = p1 - p0
-        v2 = p2 - p0
-
-        c = self.cross(v1, v2)
-        area = (c[0] ** 2 + c[1] ** 2 + c[2] ** 2) ** 0.5
-
-        return area
-
-    def calc_polygon_area(self, polygon):
-        p0 = polygon[0]
-        area = sum(self.calc_triangle_area(p0, polygon[i], polygon[i + 1])
-                   for i in range(1, len(polygon) - 1))
-        return area
-
-
-class Corners(Polygon3DMixin):
-    """A class that determines whether to include the vertices of a cube's corners
-       in a voronoi cell (polyhedron) and, if so, generates those vertices.
-
-        Args:
-            cube (Cube): clipping region.
-            org_polygons (list): a list of numpy.ndarray.
-                The vertex coordinates of the voronoi cell (polyhedron) before clipping.
-            clipped_polygons (list): a list of numpy.ndarray.
-                The vertex coordinates of a voronoi cell (polyhedron) clipped to a cube.
-            ints (list): a list of numpy.ndarray.
-                The Vertex coordinates where each edge of the clipping region's cube intersects.
-                with the faces of the voronoi cell  (polyhedron).
-    """
-
-    def __init__(self, cube, org_polygons, clipped_polygons, ints):
-        self.cube = cube
-        self.org_polygons = org_polygons
-        self.clipped_polygons = clipped_polygons
-        self.intersections = ints
-
-    def __iter__(self):
-        hull = ConvexHull(np.concatenate(self.org_polygons))
-        ipts = np.array(self.intersections)
-
-        for corner in self.cube.vertices:
-            # If the polyhedron contains a vertex before clipping, include that vertex.
-            if np.all(np.dot(hull.equations[:, :-1], corner) + hull.equations[:, -1] <= 1e-5):
-                yield corner
-                continue
-
-            # If vertices lies on three edges that form a corner, and the triangular face formed by
-            # those vertices is contained within the clipped polyhedron, include the vertex of the corner.
-            if len(x := ipts[(ipts[:, 1] == corner[1]) & (ipts[:, 2] == corner[2])]) > 0 and \
-                    len(y := ipts[(ipts[:, 0] == corner[0]) & (ipts[:, 2] == corner[2])]) > 0 and \
-                    len(z := ipts[(ipts[:, 0] == corner[0]) & (ipts[:, 1] == corner[1])]) > 0:
-
-                funcs = [np.min if corner[i] == 0 else np.max for i in range(3)]
-                tri = np.array([func(p, axis=0) for func, p in zip(funcs, [x, y, z])])
-
-                if not self.do_contain_face(tri):
-                    yield corner
-
-    def do_contain_face(self, tri):
-        """Check whether the clipped polyhedron contains the target triangular face
-           by comparing vertex coordinates.
-            Args:
-                tri (numpy.ndarray): the vertices of a triangle.
-        """
-        tri = self.sort_3d_vertices_ccw(tri)
-
-        return any(np.allclose(polygon, tri, rtol=1e-05, atol=1e-15)
-                   for polygon in self.clipped_polygons if len(polygon) == 3)
-
-
-class Faces(Polygon3DMixin):
-    """A class that generates the vertex coordinates of any non-closed faces
-       on a voronoi cell (polyhedron).
-
-        Args:
-            clipped_polygons (list): a list of numpy.ndarray.
-                The vertex coordinates of a voronoi cell (polyhedron) clipped to a cube.
-            ints (list): a list of numpy.ndarray.
-                The Vertex coordinates where each edge of the clipping region's cube intersects
-                with the faces of the voronoi cell  (polyhedron).
-            corners (list): a list of numpy.ndarray.
-                The vertex coordinates of the corners of the cubes added to the voronoi cells (polyhedra).
-            cube (Cube): clipping region.
-    """
-
-    def __init__(self, clipped_polygons, ints, corners, cube):
-        self.clipped_polygons = clipped_polygons
-        self.intersections = ints
-        self.corners = corners
-        self.cube = cube
-
-    def __iter__(self):
-        new_vertices = self.intersections + self.corners
-
-        for i in range(3):
-            for val in [0.0, self.cube.size]:
-                new_polygon = []
-
-                for polygon in self.clipped_polygons:
-
-                    for pv in polygon:
-                        for pi in self.intersections:
-                            if np.all(np.isclose(pv, pi, atol=1e-12)):
-                                pv[:] = pi[:]
-                                break
-
-                    if (vertices := polygon[polygon[:, i] == val]).size > 0:
-                        new_polygon.extend(vertices)
-
-                    if included := [v for v in new_vertices if v[i] == val]:
-                        new_polygon.extend(included)
-
-                if new_polygon:
-                    uq_vertices = np.unique(new_polygon, axis=0)
-                    sorted_vertices = self.sort_3d_vertices_ccw(uq_vertices)
-                    yield sorted_vertices
-
-
-def generate_points_in_sphere(num_points, radius=1.0):
-    # 球面上のランダムな点 (一様分布になるように調整)
-    phi = np.random.uniform(0, 2 * np.pi, num_points)
-    costheta = np.random.uniform(-1, 1, num_points)
-    u = np.random.uniform(0, 1, num_points)
-    
-    theta = np.arccos(costheta)
-    r = radius * (u**(1/3)) # 半径を3乗根で調整して均一にする
-    
-    x = r * np.sin(theta) * np.cos(phi)
-    y = r * np.sin(theta) * phi
-    z = r * np.cos(theta)
-    
-    return np.vstack((x, y, z)).T
-
-
-def generate_random_points_in_sphere(num_points, radius=1.0):
-    # 1. 3次元の標準正規分布からランダムな方向を生成 (x, y, z)
-    # points = np.random.normal(0, 2, (num_points, 3))
-    rng = np.random.default_rng()
-    points = rng.uniform(0, 2, (num_points, 3))
-    # import pdb; pdb.set_trace()
-    
-    # 2. 各点のノルム（中心からの距離）を計算
-    norms = np.linalg.norm(points - np.array([1, 1, 1]), axis=1)
-    
-    # 3. 0～1の乱数の立方根を使って、半径方向に均一に分布させる (重要)
-    # 単にradius * np.random.rand()とすると中心に固まるため
-    r = radius * np.random.rand(num_points)**(1/3)
-    
-    # 4. 点を正規化（方向を決める）し、距離を掛けて配置
-    points = points / norms[:, np.newaxis] * r[:, np.newaxis]
-    return points
-
-
-def create_sphere_dummy_points(center, radius, num_points, buffer_rate=2.):
-    # 中心球より少し大きく
-    dummy_radius = radius * buffer_rate
-
-    # 3次元球面上の点をランダムに生成 (法線分布を利用して正規化)
-    points = np.random.randn(num_points, 3)
-    points /= np.linalg.norm(points, axis=1)[:, np.newaxis]
-
-    dummy_points = points * dummy_radius + np.array(center)
-    return dummy_points
 
 
 class VoronoiClipped2Sphere(Polygon3DMixin):
@@ -494,24 +148,22 @@ class VoronoiClipped2Sphere(Polygon3DMixin):
             diff (float): how far from the vertices of the cube the dummy points should be placed.
     """
 
-    def __init__(self, cut_points=10, cube_size=2., diff=0.5):
+    def __init__(self, center, radius=1., cut_points=30):
         self.cut_points = cut_points
-        self.cube = Cube(size=cube_size, diff=diff)
+        self.sphere = Sphere(center, radius)
 
     def __iter__(self):
+        """Generate the numpy.ndarray of vertices on each face of a polyhedron
+           and that of vertices to be converted to the spherical face.
+        """
+
         rng = np.random.default_rng()
-        pts = rng.uniform(0, self.cube.size, (self.cut_points, 3))
-
-        # pts = generate_random_points_in_sphere(30)
-
-
-        # dummy_pts = np.array([pt for pt in self.cube.dummy_points()])
-        dummy_pts = create_sphere_dummy_points(np.array([1, 1, 1]), 1, 30, 2)
-
+        pts = rng.uniform(0, self.sphere.radius * 2, (self.cut_points, 3))
+        dummy_pts = self.sphere.dummy_points()
         all_pts = np.concatenate([pts, dummy_pts])
 
         vor = Voronoi(all_pts)
-        clipping = Clipping(vor, self.cube)
+        clipping = Clipping(vor, self.sphere)
 
         # Index of the voronoi region for each input point
         for region_index in vor.point_region:
@@ -519,38 +171,18 @@ class VoronoiClipped2Sphere(Polygon3DMixin):
             region = vor.regions[region_index]
 
             if -1 not in region and len(region) > 0:
-                polygons_clipped, polygons_new = [], []
+                polygons_clipped, polygon_vertices = [], []
 
-                for section, clipped in clipping(region):
-                    if clipped:
-                        polygons_clipped.append(np.array(clipped))
-                    
-                    if section:
-                        polygons_new.extend(section)
-                # Intersection points of polygons and cube edges.
-                # if len(ints := [ip for ip in Intersect(polygons_original, self.cube)]) > 0:
-                #     ints = self.round_off(np.array(ints), NDIGITS)
-                #     ints = [ip for ip in self.unique_close(np.unique(ints, axis=0))]
-                #     # If the vertices of the cube's corners are needed, include them among the vertices of the polyhedron.
-                #     corners = [c for c in Corners(self.cube, polygons_original, polygons_clipped, ints)]
+                for clipped, intersections in clipping(region):
+                    polygons_clipped.append(clipped)
 
-                # If there are any open sides, close them.
-                # if new_polygons := [poly for poly in Faces(polygons_clipped, ints, corners, self.cube)]:
-                #     polygons_clipped.extend(new_polygons)
+                    if intersections.size > 0:
+                        polygon_vertices.append(intersections)
 
-                if polygons_new:
-                    # import pdb; pdb.set_trace()
-                    # import pdb; pdb.set_trace()
-                    polygons_new = self.sort_3d_vertices_ccw(np.array(polygons_new))
-                    # polygons_new = [ip for ip in self.unique_close(np.unique(np.array(polygons_new), axis=0))]
-                    polygons_new = np.unique(np.array(polygons_new), axis=0)
-                    polygons_new = self.sort_3d_vertices_ccw(np.array(polygons_new))
-                    polygons_clipped.append(polygons_new)
-
-                    # sorted_new_poly = self.sort_3d_vertices_ccw(np.array(polygons_new))
-                    # polygons_clipped.append(sorted_new_poly)
-
+                if polygon_vertices:
+                    polygon_vertices = np.unique(np.vstack(polygon_vertices), axis=0)
+                    polygon_vertices = self.sort_3d_vertices_ccw(np.array(polygon_vertices))
+                    polygons_clipped.append(polygon_vertices)
 
                 if polygons_clipped:
-                #     pprint(polygons_clipped)
-                    yield polygons_clipped, polygons_new
+                    yield polygons_clipped, polygon_vertices
