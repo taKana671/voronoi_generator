@@ -153,12 +153,17 @@ class VoronoiClipped2Sphere(Polygon3DMixin):
         self.sphere = Sphere(center, radius)
 
     def __iter__(self):
-        """Generate the numpy.ndarray of vertices on each face of a polyhedron
-           and that of vertices to be converted to the spherical face.
+        """Generate the following two arrays.
+            polygons_clipped (numpy.ndarray): the vertices on each face of a polyhedron.
+            polygon_vertices (numpy.ndarray):
+                vertices to be converted to the spherical face;
+                if the conversion is not necessary, generate an empty list.
         """
 
         rng = np.random.default_rng()
         pts = rng.uniform(0, self.sphere.radius * 2, (self.cut_points, 3))
+        # pts = rng.uniform(-self.sphere.radius, self.sphere.radius, (self.cut_points, 3))
+
         dummy_pts = self.sphere.dummy_points()
         all_pts = np.concatenate([pts, dummy_pts])
 
