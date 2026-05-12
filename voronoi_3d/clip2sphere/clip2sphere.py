@@ -2,7 +2,6 @@ import numpy as np
 from scipy.spatial import Voronoi
 
 from ..polygon3d_mixin import Polygon3DMixin
-from pprint import pprint
 
 NDIGITS = 8
 
@@ -11,15 +10,11 @@ NDIGITS = 8
 
 class Sphere:
     """A class representing a clipping spherical region.
-
-        Args:
-            center (numpy.ndarray): the center of a sphere.
-            radius (float): the sphere radius.
     """
 
-    def __init__(self, center, radius):
-        self.center = center
-        self.radius = radius
+    def __init__(self):
+        self.center = np.array([0, 0, 0])
+        self.radius = 1
 
     def dummy_points(self, num_points=30, buffer_rate=2.):
         # Make the radius larger than that of the center sphere.
@@ -144,25 +139,19 @@ class VoronoiClipped2Sphere(Polygon3DMixin):
 
         Args:
             cut_points(int): the number of polyhedrons to divide a cube into.
-            cube_size (float): length of a cube's edge.
-            diff (float): how far from the vertices of the cube the dummy points should be placed.
     """
 
-    def __init__(self, center, radius=1., cut_points=30):
+    def __init__(self, cut_points=30):
         self.cut_points = cut_points
-        self.sphere = Sphere(center, radius)
+        self.sphere = Sphere()
 
     def __iter__(self):
-        """Generate the following two arrays.
-            polygons_clipped (numpy.ndarray): the vertices on each face of a polyhedron.
-            polygon_vertices (numpy.ndarray):
-                vertices to be converted to the spherical face;
-                if the conversion is not necessary, generate an empty list.
+        """Generate a list of numpy.ndarray and an index indicating where the spherical face is located in the list.
+            polygons_clipped (list): a list of numpy.ndarray including the vertices on each face of a polyhedron.
+            spherical_idx (int): if there is no spherical face, None
         """
-
         rng = np.random.default_rng()
-        pts = rng.uniform(0, self.sphere.radius * 2, (self.cut_points, 3))
-        # pts = rng.uniform(-self.sphere.radius, self.sphere.radius, (self.cut_points, 3))
+        pts = rng.uniform(-self.sphere.radius, self.sphere.radius, (self.cut_points, 3))
 
         dummy_pts = self.sphere.dummy_points()
         all_pts = np.concatenate([pts, dummy_pts])
@@ -184,10 +173,13 @@ class VoronoiClipped2Sphere(Polygon3DMixin):
                     if intersections.size > 0:
                         polygon_vertices.append(intersections)
 
-                if polygon_vertices:
-                    polygon_vertices = np.unique(np.vstack(polygon_vertices), axis=0)
-                    polygon_vertices = self.sort_3d_vertices_ccw(np.array(polygon_vertices))
-                    polygons_clipped.append(polygon_vertices)
-
                 if polygons_clipped:
-                    yield polygons_clipped, polygon_vertices
+                    spherical_idx = None
+
+                    if polygon_vertices:
+                        polygon_vertices = np.unique(np.vstack(polygon_vertices), axis=0)
+                        polygon_vertices = self.sort_3d_vertices_ccw(np.array(polygon_vertices))
+                        polygons_clipped.append(polygon_vertices)
+                        spherical_idx = len(polygons_clipped) - 1
+
+                    yield polygons_clipped, spherical_idx

@@ -1,4 +1,7 @@
+import math
+
 import numpy as np
+
 from ..polygon_mixin import PolygonMixin
 
 
@@ -50,3 +53,7 @@ class Polygon3DMixin(PolygonMixin):
             a[2] * b[0] - a[0] * b[2],
             a[0] * b[1] - a[1] * b[0]
         ])
+
+    def normalize(self, vertex):
+        norm = math.hypot(*vertex)
+        return vertex / norm
