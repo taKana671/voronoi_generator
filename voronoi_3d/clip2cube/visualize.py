@@ -10,10 +10,11 @@ def visualize(cut_points=10, cube_size=1., diff=.5, alpha=.6):
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
+    offset = np.full(3, cube_size / 2)
 
-    for poly in polyhedrons:
+    for polyhedron in polyhedrons:
         polygon = Poly3DCollection(
-            poly,
+            [poly + offset for poly in polyhedron],
             alpha=alpha,
             facecolors=np.random.uniform(0, 1, 3),
             linewidth=0.8,
@@ -21,7 +22,8 @@ def visualize(cut_points=10, cube_size=1., diff=.5, alpha=.6):
         )
         ax.add_collection3d(polygon)
 
-    ax.set_xlim([0, cube_size])
-    ax.set_ylim([0, cube_size])
-    ax.set_zlim([0, cube_size])
+    ax_range = [0, cube_size]
+    ax.set_xlim(ax_range)
+    ax.set_ylim(ax_range)
+    ax.set_zlim(ax_range)
     plt.show()
