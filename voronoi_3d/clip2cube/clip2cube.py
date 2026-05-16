@@ -334,7 +334,7 @@ class Faces(Polygon3DMixin):
                     yield sorted_vertices
 
 
-class VoronoiClipped2Cube(Polygon3DMixin):
+class VoronoiClip2Cube(Polygon3DMixin):
     """A class that generates vertex coordinates for each voronoi cell clipped to a cube.
 
         Args:

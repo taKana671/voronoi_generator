@@ -134,11 +134,11 @@ class Clipping(Polygon3DMixin):
                 pass
 
 
-class VoronoiClipped2Sphere(Polygon3DMixin):
-    """A class that generates vertex coordinates for each voronoi cell clipped to a cube.
+class VoronoiClip2Sphere(Polygon3DMixin):
+    """A class that generates vertex coordinates for each voronoi cell clipped to a sphere.
 
         Args:
-            cut_points(int): the number of polyhedrons to divide a cube into.
+            cut_points(int): the number of polyhedrons to divide a sphere into.
     """
 
     def __init__(self, cut_points=30):

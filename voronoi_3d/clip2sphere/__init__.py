@@ -1,1 +1,1 @@
-from .clip2sphere import VoronoiClipped2Sphere
+from .clip2sphere import VoronoiClip2Sphere
