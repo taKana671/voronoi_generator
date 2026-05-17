@@ -1,2 +1,2 @@
-from .clip2cube import VoronoiClipped2Cube
+from .clip2cube import VoronoiClip2Cube
 from .visualize import visualize

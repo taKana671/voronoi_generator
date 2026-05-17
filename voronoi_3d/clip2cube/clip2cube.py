@@ -11,27 +11,32 @@ class Cube:
     """A class representing a clipping region.
 
         Args:
-            cube_size (float): length of a cube's edge.
+            size (float): length of a cube's edge.
             diff (float): how far from the vertices of the cube the dummy points should be placed.
     """
 
     def __init__(self, size=1., diff=.5):
         self.size = size
         self.diff = diff
+        self.size_min = -self.size / 2
+        self.size_max = self.size / 2
+
         self.vertices = self.define_vertices()
         self.planes = self.define_planes()
         self.edges = self.define_edges()
 
     def define_vertices(self):
+        half = self.size / 2
+
         vertices = np.array([
-            [0, 0, 0],
-            [0, 0, self.size],
-            [self.size, 0, 0],
-            [self.size, 0, self.size],
-            [self.size, self.size, 0],
-            [self.size, self.size, self.size],
-            [0, self.size, 0],
-            [0, self.size, self.size]
+            [-half, -half, -half],
+            [-half, -half, half],
+            [half, -half, -half],
+            [half, -half, half],
+            [half, half, -half],
+            [half, half, half],
+            [-half, half, -half],
+            [-half, half, half]
         ])
 
         return vertices
@@ -64,8 +69,8 @@ class Cube:
         return edges
 
     def dummy_points(self):
-        lower = -self.diff
-        upper = self.size + self.diff
+        lower = self.size_min - self.diff
+        upper = self.size_max + self.diff
         nums = (lower, 0, upper)
 
         for i in nums:
@@ -120,8 +125,7 @@ class Clipping(Polygon3DMixin):
         length = len(vertices)
 
         for i, p1 in enumerate(vertices):
-            p2 = np.array(vertices[(i + 1) % length])
-
+            p2 = vertices[(i + 1) % length]
             p1_inside = self.is_inside(p1, plane_normal, plane_point)
             p2_inside = self.is_inside(p2, plane_normal, plane_point)
 
@@ -307,7 +311,7 @@ class Faces(Polygon3DMixin):
         new_vertices = self.intersections + self.corners
 
         for i in range(3):
-            for val in [0.0, self.cube.size]:
+            for val in [self.cube.size_min, self.cube.size_max]:
                 new_polygon = []
 
                 for polygon in self.clipped_polygons:
@@ -330,7 +334,7 @@ class Faces(Polygon3DMixin):
                     yield sorted_vertices
 
 
-class VoronoiClipped2Cube(Polygon3DMixin):
+class VoronoiClip2Cube(Polygon3DMixin):
     """A class that generates vertex coordinates for each voronoi cell clipped to a cube.
 
         Args:
@@ -345,7 +349,7 @@ class VoronoiClipped2Cube(Polygon3DMixin):
 
     def __iter__(self):
         rng = np.random.default_rng()
-        pts = rng.uniform(0, self.cube.size, (self.cut_points, 3))
+        pts = rng.uniform(self.cube.size_min, self.cube.size_max, (self.cut_points, 3))
 
         dummy_pts = np.array([pt for pt in self.cube.dummy_points()])
         all_pts = np.concatenate([pts, dummy_pts])
