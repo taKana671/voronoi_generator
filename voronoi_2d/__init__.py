@@ -1,2 +1,2 @@
-from .bounded_voronoi import BoundedVoronoiGenerator, ConvexPolygonGenerator
+from .bounded_voronoi import BoundedVoronoiGenerator, VoronoiSitesGenerator, RoundedVoronoiGenerator
 from .polygon2d_mixin import Polygon2DMixin
