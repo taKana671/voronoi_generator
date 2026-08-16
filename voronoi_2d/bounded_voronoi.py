@@ -42,7 +42,7 @@ class BoundedVoronoiGenerator:
         vor = Voronoi(conc_pts)
         bnd_poly = Polygon(self.bnd)
 
-        for i in range(len(conc_pts) - len(dummy_pts)):
+        for i in range(len(self.pts)):
             vor_poly = [vor.vertices[v] for v in vor.regions[vor.point_region[i]]]
             poly = Polygon(vor_poly)
 
@@ -51,7 +51,9 @@ class BoundedVoronoiGenerator:
                     continue
                 poly = shrunk_poly
 
-            cell = bnd_poly.intersection(poly)
+            if (cell := bnd_poly.intersection(poly)).is_empty:
+                continue
+
             yield np.array(cell.exterior.coords[:-1])
 
 
