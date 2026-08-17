@@ -47,25 +47,3 @@ class Polygon2DMixin(PolygonMixin):
 
         arr = np.array(cell.exterior.coords[:-1])
         return arr
-
-
-
-
-    # def round_corners(self, pts, buffer_size_dilation, quad_seg):
-    #     """Rounds the corners of a convex polygon to return Numpy.ndarray of vertex coordinates.
-    #          Args:
-    #             pts (Numpy.ndarray): polygon vertex coordinate
-    #     """
-    #     arc_length_90 = (2 * math.pi * buffer_size_dilation) / 4
-    #     single_seg_length = arc_length_90 / quad_seg
-    #     segment_length = single_seg_length * 2.5
-
-
-    #     poly = Polygon(pts)
-    #     cell = poly.buffer(buffer_size_dilation, join_style='round', quad_segs=quad_seg)
-
-    #     cell = shapely.segmentize(cell, max_segment_length=segment_length)
-        
-
-    #     arr = np.array(cell.exterior.coords[:-1])
-    #     return arr

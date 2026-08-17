@@ -15,7 +15,7 @@ class BoundedVoronoiGenerator:
                 Vertex coordinates of the sites; [[x1, y1], [x2, y2], ...]
                 If None is specified, the specified number of cnt_points will be automatically generated.
             bnd (numpy.ndarray): Vertex coordinates of a convex polygon as clipping boundary; default is None.
-                If `None` is specified, a square with a side length of 1 is used.
+                If None is specified, a square with a side length of 1 is used.
             cut_points (int): Number of sites; default is 10.
             buffer_size_erosion (float):
                 Specify how much to shrink the Voronoi cells; must be less than 0.
@@ -46,7 +46,7 @@ class BoundedVoronoiGenerator:
             vor_poly = [vor.vertices[v] for v in vor.regions[vor.point_region[i]]]
             poly = Polygon(vor_poly)
 
-            if self.buffer_size_erosion:
+            if self.buffer_size_erosion is not None and self.buffer_size_erosion < 0:
                 if (shrunk_poly := poly.buffer(self.buffer_size_erosion)).is_empty:
                     continue
                 poly = shrunk_poly
@@ -58,7 +58,7 @@ class BoundedVoronoiGenerator:
 
 
 class VoronoiSitesGenerator:
-    """A class that randomly generates points inside a convex polygon
+    """A class that randomly generates Voronoi sites
 
         Args:
             bnd (numpy.ndarray): Coordinates of convex polygon vertices
