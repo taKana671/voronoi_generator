@@ -108,7 +108,7 @@ The visualization results are as follows.
   import matplotlib.pyplot as plt
   from matplotlib.patches import Polygon
   
-  from voronoi_generator.voronoi_2d import BoundedVoronoiGenerator, ConvexPolygonGenerator
+  from voronoi_generator.voronoi_2d import BoundedVoronoiGenerator, VoronoiSitesGenerator
 
   
   def visualize1():
@@ -135,7 +135,7 @@ The visualization results are as follows.
         [0.62157049, 0.3502432]
     ])
 
-    pts = [pt for pt in ConvexPolygonGenerator(polygon)]
+    pts = [pt for pt in VoronoiSitesGenerator(polygon)]
     for region in BoundedVoronoiGenerator(pts=pts, bnd=polygon, shrink=0):
         ax.add_patch(Polygon(region, facecolor=np.random.uniform(0, 1, 3), alpha=0.6, edgecolor='gray'))
 
