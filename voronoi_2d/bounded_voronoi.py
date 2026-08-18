@@ -4,7 +4,7 @@ import numpy as np
 
 from scipy.spatial import ConvexHull, Voronoi
 from shapely import segmentize
-from shapely.geometry import Polygon
+from shapely import Polygon
 
 
 class BoundedVoronoiGenerator:
