@@ -29,18 +29,18 @@ As shown below, it is also possible to visualize a 3D Voronoi diagram.
     <tr>
       <th>visualization</th>
       <th>3D model</th>
+      <th>broken</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td><img width="619" height="417" alt="Image" src="https://github.com/user-attachments/assets/7576372c-0a8f-4730-97b4-ad6effe37001" /></td>
-      <td><img width="620" height="372" alt="Image" src="https://github.com/user-attachments/assets/9262ea8f-b3da-454a-90c5-c77efb9c5f31" /></td>  
+      <td><img width="616" height="451" alt="Image" src="https://github.com/user-attachments/assets/f589cd9d-15c2-4398-928b-d665a0bb8769" /></td>
+      <td><img width="546" height="388" alt="Image" src="https://github.com/user-attachments/assets/5670bff4-f3b7-4d75-883a-116a409b3750" /></td> 
+      <td><img width="784" height="580" alt="Image" src="https://github.com/user-attachments/assets/4956d753-b17e-4dfe-8609-b0c7b173dc18" /></td>
     </tr>
   </tbody>  
 </table>
 <br>
-
-<img width="1108" height="393" alt="Image" src="https://github.com/user-attachments/assets/ceedf55b-2edb-4316-9dcf-d84455e15dd5" />
 
 <pre>
 import numpy as np
@@ -84,18 +84,19 @@ In [Clipped3DVoronoi](https://github.com/taKana671/Clipped3DVoronoi), Created 3D
     <tr>
       <th>visualization</th>
       <th>3D model</th>
+      <th>broken</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td><img width="640" height="480" alt="Image" src="https://github.com/user-attachments/assets/36a96975-99c9-40c5-875e-8f693130dd98" /></td>
-      <td><img width="523" height="321" alt="Image" src="https://github.com/user-attachments/assets/c9c44f0b-56c3-47d8-b212-5af9d20d8833" /></td>  
+      <td><img width="616" height="461" alt="Image" src="https://github.com/user-attachments/assets/1051b258-db46-4c7b-9daf-0309c8e93131" /></td>
+      <td><img width="547" height="338" alt="Image" src="https://github.com/user-attachments/assets/77c935f0-86bd-4548-9f40-5713c54401bd" /></td>
+      <td><img width="744" height="564" alt="Image" src="https://github.com/user-attachments/assets/2a83220d-4193-42eb-a0cc-c38f22a2eb6a" /></td>
     </tr>
   </tbody>  
 </table>
 <br>
 
-<img width="1103" height="392" alt="Image" src="https://github.com/user-attachments/assets/90616e3d-7595-4300-bb16-9197f84308c5" />
 
 ## voronoi_2d
 
@@ -151,7 +152,7 @@ def visualize2():
 ---
 
 I used `shapely.Polygon.buffer` to round the corners of a Voronoi cell clipped to a convex polygon. 
-In this repository, I use the vertex coordinates of the rounded Voronoi cell to create a prism.
+In  [VoronoiCity3](https://github.com/taKana671/VoronoiCity3), I use the vertex coordinates of the rounded Voronoi cell to create a prism.
 
 <img width="1187" height="480" alt="Image" src="https://github.com/user-attachments/assets/7ace7a48-6b11-4546-b677-c92dca93a724" />
 
