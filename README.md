@@ -29,7 +29,7 @@ As shown below, it is also possible to visualize a 3D Voronoi diagram.
     <tr>
       <th>visualization</th>
       <th>3D model</th>
-      <th>broken</th>
+      <th>3D model broken</th>
     </tr>
   </thead>
   <tbody>
@@ -84,7 +84,7 @@ In [Clipped3DVoronoi](https://github.com/taKana671/Clipped3DVoronoi), Created 3D
     <tr>
       <th>visualization</th>
       <th>3D model</th>
-      <th>broken</th>
+      <th>3D model broken</th>
     </tr>
   </thead>
   <tbody>
