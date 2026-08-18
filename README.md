@@ -40,6 +40,8 @@ As shown below, it is also possible to visualize a 3D Voronoi diagram.
 </table>
 <br>
 
+<img width="1108" height="393" alt="Image" src="https://github.com/user-attachments/assets/ceedf55b-2edb-4316-9dcf-d84455e15dd5" />
+
 <pre>
 import numpy as np
 import matplotlib.pyplot as plt
@@ -93,7 +95,7 @@ In [Clipped3DVoronoi](https://github.com/taKana671/Clipped3DVoronoi), Created 3D
 </table>
 <br>
 
-
+<img width="1103" height="392" alt="Image" src="https://github.com/user-attachments/assets/90616e3d-7595-4300-bb16-9197f84308c5" />
 
 ## voronoi_2d
 
@@ -104,26 +106,27 @@ The visualization results are as follows.
 <img width="865" height="360" alt="Image" src="https://github.com/user-attachments/assets/ff73ca15-8932-418a-b2ea-9b12388fab76" />
 
 <pre>
-  import numpy as np
-  import matplotlib.pyplot as plt
-  from matplotlib.patches import Polygon
-  
-  from voronoi_generator.voronoi_2d import BoundedVoronoiGenerator, ConvexPolygonGenerator
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.patches import Polygon
 
-  
-  def visualize1():
+from voronoi_generator.voronoi_2d import BoundedVoronoiGenerator, VoronoiSitesGenerator
+
+
+def visualize1():
     fig = plt.figure()
     ax = fig.add_subplot(111)
 
-    for region in BoundedVoronoiGenerator(cnt_points=20, shrink=0.):
-        ax.add_patch(Polygon(region, facecolor=np.random.uniform(0, 1, 3), alpha=0.6, edgecolor='gray'))
+    for region in BoundedVoronoiGenerator(cnt_points=20, buffer_size_erosion=None):
+        ax.add_patch(Polygon(
+            region, facecolor=np.random.uniform(0, 1, 3), alpha=0.6, edgecolor='gray'))
 
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     plt.show()
 
 
-  def visualize2():
+def visualize2():
     fig = plt.figure()
     ax = fig.add_subplot(111)
 
@@ -135,14 +138,23 @@ The visualization results are as follows.
         [0.62157049, 0.3502432]
     ])
 
-    pts = [pt for pt in ConvexPolygonGenerator(polygon)]
-    for region in BoundedVoronoiGenerator(pts=pts, bnd=polygon, shrink=0):
-        ax.add_patch(Polygon(region, facecolor=np.random.uniform(0, 1, 3), alpha=0.6, edgecolor='gray'))
+    pts = [pt for pt in VoronoiSitesGenerator(polygon)]
+    for region in BoundedVoronoiGenerator(pts=pts, bnd=polygon, buffer_size_erosion=None):
+        ax.add_patch(Polygon(
+            region, facecolor=np.random.uniform(0, 1, 3), alpha=0.6, edgecolor='gray'))
 
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     plt.show()
 </pre>
+
+---
+
+I used `shapely.Polygon.buffer` to round the corners of a Voronoi cell clipped to a convex polygon. 
+In this repository, I use the vertex coordinates of the rounded Voronoi cell to create a prism.
+
+<img width="1187" height="480" alt="Image" src="https://github.com/user-attachments/assets/7ace7a48-6b11-4546-b677-c92dca93a724" />
+
 
 # References
 

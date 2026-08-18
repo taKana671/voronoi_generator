@@ -1,6 +1,7 @@
+import shapely
 import numpy as np
 from shapely.constructive import maximum_inscribed_circle
-from shapely.geometry import Polygon
+from shapely import Polygon
 
 from ..polygon_mixin import PolygonMixin
 
@@ -10,7 +11,7 @@ class Polygon2DMixin(PolygonMixin):
     def get_max_inscribed_circle(self, pts):
         """Get the radius and center of the inscribed circle.
             Args:
-                pts (numpy.ndarray): Iregular polygon vertices
+                pts (Numpy.ndarray): Iregular polygon vertices
         """
         poly = Polygon(pts)
         mic = maximum_inscribed_circle(poly)
@@ -25,3 +26,24 @@ class Polygon2DMixin(PolygonMixin):
         sorted_indices = np.argsort(angles)
         sorted_pts = arr[sorted_indices]
         return sorted_pts
+
+    def round_polygon_corners(self, vertices, buffer_size_erosion=None, buffer_size_dilation=0.03,
+                              quad_segs=16, segment_length=None):
+        """Rounds the corners of a convex polygon to return Numpy.ndarray of vertex coordinates.
+        """
+
+        poly = Polygon(vertices)
+
+        if buffer_size_erosion is not None:
+            if (shrunk_poly := poly.buffer(buffer_size_erosion)).is_empty:
+                return None
+
+            poly = shrunk_poly
+
+        cell = poly.buffer(buffer_size_dilation, join_style='round', quad_segs=quad_segs)
+
+        if segment_length is not None:
+            cell = shapely.segmentize(cell, max_segment_length=segment_length)
+
+        arr = np.array(cell.exterior.coords[:-1])
+        return arr
