@@ -1,7 +1,10 @@
-import shapely
+import random
+
+import cv2
 import numpy as np
-from shapely.constructive import maximum_inscribed_circle
+import shapely
 from shapely import Polygon
+from shapely.constructive import maximum_inscribed_circle
 
 from ..polygon_mixin import PolygonMixin
 
@@ -47,3 +50,33 @@ class Polygon2DMixin(PolygonMixin):
 
         arr = np.array(cell.exterior.coords[:-1])
         return arr
+
+    def find_convex_polygon_in_irregular_region(self, img, within=0.8, vertex_cnt=5):
+        """Find the vertex coordinates of a convex polygon within an irregular region.
+            Args:
+                img (Numpy.ndarray): A black-and-white binary image
+                within (float):
+                    Specify the percentage of the radius within which to create a convex polygon.
+                    Default is 0.8.
+                vertex_cnt (int): The number of a convex polygon; default is 5.
+        """
+        if img.ndim == 3:
+            # img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            img = img[:, :, 0]
+
+        # Find the radius and center of the greatest inscribed circle.
+        dist_transform = cv2.distanceTransform(img, cv2.DIST_L2, 5)
+        _, max_val, _, max_loc = cv2.minMaxLoc(dist_transform)
+        cx, cy = max_loc
+        radius = max_val * within
+
+        angles = sorted([random.uniform(0, 2 * np.pi) for _ in range(vertex_cnt)])
+        vertices = []
+
+        for angle in angles:
+            x = int(cx + radius * np.cos(angle))
+            y = int(cy + radius * np.sin(angle))
+            vertices.append([x, y])
+
+        region = np.array(vertices, dtype=np.float64)
+        return region
