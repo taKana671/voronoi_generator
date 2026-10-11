@@ -54,15 +54,15 @@ class Polygon2DMixin(PolygonMixin):
     def find_convex_polygon_in_irregular_region(self, img, within=0.8, vertex_cnt=5):
         """Find the vertex coordinates of a convex polygon within an irregular region.
             Args:
-                img (Numpy.ndarray): A black-and-white binary image
+                img (Numpy.ndarray): A black-and-white binary 8bit image
                 within (float):
                     Specify the percentage of the radius within which to create a convex polygon.
                     Default is 0.8.
                 vertex_cnt (int): The number of a convex polygon; default is 5.
         """
         if img.ndim == 3:
-            # img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             img = img[:, :, 0]
+            # img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
         # Find the radius and center of the greatest inscribed circle.
         dist_transform = cv2.distanceTransform(img, cv2.DIST_L2, 5)
@@ -79,4 +79,15 @@ class Polygon2DMixin(PolygonMixin):
             vertices.append([x, y])
 
         region = np.array(vertices, dtype=np.float64)
-        return region
+        return (cx, cy), radius, region
+
+    def get_max_distance_from_center(self, verts):
+        """Calculate the center point from the vertex coordinates that form a convex polygon,
+            and retrieve the coordinates of the vertex farthest from the center point
+            Args:
+                verts (Numpy.ndarray): vertex coordinates that form a convex polygon
+        """
+        center = np.mean(verts, axis=0)
+        distances = np.sum((verts - center) ** 2, axis=1)
+        max_distance = np.max(distances) ** 0.5
+        return center, max_distance
